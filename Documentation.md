@@ -1,112 +1,62 @@
-{
- "cells": [
-  {
-   "cell_type": "markdown",
-   "id": "26955cb3",
-   "metadata": {},
-   "source": [
-    "# Graphical User Interface (GUI) to aid human review of processed-ground-motions\n",
-    "\n",
-    "## Authors: Maria E. Ramos-Sepulveda, Scott J. Brandenberg, Tristan Buckreis, Meibai Li, Shako Ahmed, and Jonathan P. Stewart\n",
-    "\n",
-    "The UCLA geotechnical group prepared a graphical user interface (GUI) to facilitate a human review of records processed by gmprocess. The algorithms utilized by gmprocess to accept/reject, window, and filter records work well most of the time, but cannot account for all possible issues that might arise. For this reason, reviewing the processed records is prudent. The purpose of this GUI is to facilitate rapid review. Acceleration and displacement time series, as well as response spectra can be visually inspected to find any potential errors. The GUI utilizes Jupyter and allows the user to load an HDF5 file output from gmprocess, interact with the data by accepting or rejecting records, and adjusting high-pass and low-pass filter parameters. In the example below we describe the procedure to run and interact with the GUI.\n",
-    "\n",
-    "## Requirements\n",
-    "- A workspace.h5 file produced by gmprocess through the \"process_waveforms\" step. For example `gmrecords --eventid nc73291880 download`, `gmrecords assemble` and `gmrecords process_waveforms` must be run before going through this review step. \n",
-    "- The Python script named `HumanReviewGUI.py` that contains the class variable and function defintions that will be called by a Jupyter Notebook. \n",
-    "- A Jupyter Notebook that instantiates the HumanReviewGUI class.\n",
-    "- gmprocess\n",
-    "- obspy\n",
-    "- ipywidgets\n",
-    "- pandas\n",
-    "- numpy\n",
-    "- matplotlib\n",
-    "- ucla_geotech_tools.response_spectrum\n",
-    "- json\n",
-    "- prov\n",
-    "- ipympl\n",
-    "\n",
-    "## Jupyter notebook\n",
-    "\n",
-    "Creating the GUI requires only three lines of code, shown below. Older versions of Jupyter might require %matplotlib notebook instead of %matplotlib widget. Running these three lines should produce plots like the ones shown in the sections that follow.\n",
-    "\n",
-    "```python\n",
-    "%matplotlib widget\n",
-    "import HumanReviewGUI_working as HRG\n",
-    "GUI = HRG.HumanReviewGUI()\n",
-    "```\n",
-    "\n",
-    "## Plots description\n",
-    "The interface is shown in Figure 1, and consists of a control panel and four plots. The control panel contains a field where users input the filename and load the HDF5 file. The toggle buttons next to the load button filter data by showing only data waveforms that have not been reviewed, those that have been accepted, and/or those that have been rejected. The second row of the control panel has buttons to browse to the previous or next record, along with a dropdown menu for selecting a specific record. Next to the right are the buttons for accepting or rejecting the record. A record should be accepted when the user considers it to have been processed correctly, and rejected when the user believes that the record should not be processed because it is too noisy or has other flaws. The bottom row of the control panel contains the name of the user who processed the record, the earthquake magnitude, and the epicentral distance. Users can also set the high-pass and low-pass corner frequencies (fchp and fclp respectively), and check a box to control whether the fclp is applied at all. The filters utilize the same order and filter type as specified by the user in gmprocess and are not configurable in the GUI. We found that these options do not require adjustment after processing in gmprocess.\n",
-    "<br/><br/>\n",
-    "The orange traces depict the unfiltered record. In this context, \"unfiltered\" refers to the trace that has not gone through the Butterworth filter, but is trimmed, demeaned and tapered. The blue trace (\"filtered GUI\") is filtered using the `apply_filter` function inside the python script and it will change if any of the corner frequencies are modified. The blue time series includes the minimum between 60 seconds of noise and the maximum noise length of a record while the traces called from gmprocess have 2 seconds (default in config file). The translucent red (\"filtered gmprocess\") is the record filtered inside gmprocess. This trace will not change if the corner frequencies are modified. The purpose of including both filtered traces (blue and red) is so the user can compare any improvements done in the GUI. The red trace was set to translucent to aid the visual comparison. As a result of superimposing the red over the blue, this trace will seem purple whenever \"filtered GUI\" overlaps \"filtered gmprocess\". The smoothed noise spectrum is shown in green and only for the Fourier transform spectra. The black dotted line is the theoretical acceleration decay at low frequency according to the $f^2$ model (Brune 1970; Boore and Bommer 2005), the user can use it as reference. The dashed-black lines depict corner frequencies in the Fourier spectra and the highest-usable period (factor of 0.8) in the response spectra. \n",
-    "\n",
-    "![interface](interface2.png)*Figure 1: Interface of Graphic User Interface for human review*\n",
-    "\n",
-    "## Procedure\n",
-    "Changes implemented in the GUI are recorded in the HDF5 file through an `auxiliary_data` folder named `review`. In the `review` section you can find which records were accepted or rejected and the corresponding corner frequency values. To integrate these changes into the `provenance` and update the `waveforms`, the user needs to run `gmrecords process -r`. The changes in the `auxiliary_data` folder will then be reflected in the `provenance` directory of the .h5 file.\n",
-    "\n",
-    "The processing steps are listed below:\n",
-    "- Load workspace.h5\n",
-    "- Evaluate acceleration, displacement, amplitude and response plots.\n",
-    "- Increase values of fchp if necessary.\n",
-    "- Change and/or apply value of fclp if necessary.\n",
-    "- Accept or reject the record accordingly. The GUI will automatically proceed to the next trace.\n",
-    "- Run `gmrecords process -r` to overwrite the traces objects in the workspace.h5.\n",
-    "\n",
-    "### Changes in high-pass corner frequencies\n",
-    "The most common modification is an adjustment to the fchp. The automated selection of fchp is done using the `auto_fchp` package inside gmprocess, which fits a 6th order polynomial to the displacement trace and adjusts the fchp until the amplitude of the polynomial fit is a specified fraction of the amplitude of the displacement trace. Sometimes, the automated fchp value is not high enough to discard lingering long period noise (which can be observed as a wobbly displacement trace, shown in Figure 3). In this case, the fchp was increased to 0.19 Hz to render a displacement trace that is stable prior to the p-wave arrival, as shown in Figure 4.\n",
-    "\n",
-    "![fchp_before](fchp_before2.png)*Figure 3: Example trace with an automated selected fchp resulting in an irregular displacement time series*\n",
-    "\n",
-    "![fchp_after](fchp_after2.png)*Figure 4: Example trace shown in Figure 3 with a modified fchp resulting in a regular displacement time series*\n",
-    "\n",
-    "### Changes in low-pass corner frequencies\n",
-    "Depending on how the user configured their gmprocess, the fclp could be applied every time or never. In the GUI, by default, fclp is not applied to the blue trace (\"filtered GUI\") because we have found that the fclp is usually not required. The value shown in the header of the plots is the fclp selected by gmprocess which is chosen to be the minimum between $0.7*Nyquist$ frequency and the highest frequency where SNR undergoes certain threshold. High amplitude short period noise could be reflected as an irregular peak in the response spectrum at short periods (Figure 5). The noise can be excluded from the trace by checking the box to the right and applying an fclp of the same value (Figure 6). In this case a low-pass filter at 14.6 Hz stabilized the short-period portion of the response spectrum.\n",
-    "\n",
-    "![fclp_before](fclp_before2.png)*Figure 5: Example trace without fclp resulting in an irregular response spectra shape*\n",
-    "\n",
-    "![fclp_after](fclp_after2.png)*Figure 6: Example trace shown in Figure 5 with fclp resulting in a flat response spectra at short periods*\n",
-    "\n",
-    "### Example of rejected record\n",
-    "Some records contaminated with significant noise might pass the \"failing criteria\" of gmprocess. We believe this may be the result of randomness in the pre-event noise window. Usually, these records are easy to spot in the acceleration time series. An example is shown in Figure 7. Although the earthquake trace is visible above the noise level, we consider this record to be too noisy and opted to reject it.\n",
-    "\n",
-    "![rejected](rejected2.png)*Figure 7: Example trace with significant noise that should be rejected*\n",
-    "\n",
-    "## Limitations\n",
-    "1. Gmprocess might miscompute the location of the p-wave arrival or the coda. None of those issues could be further improved using the GUI. \n",
-    "2. The GUI will not update the `provenance` folder in the workspace.h5. If the user wants to pass this information from the `auxiliary_data` folder to the `provenance` folder and recompute the `waveforms`, the user needs to run `gmrecords process -r`.\n",
-    "3. The GUI will convert the units of unprocessed traces into $m/s^2$ if the raw data is in g units or in a mseed format. Otherwise, the traces in the plots will be offset and the user will have to go to the python code and apply the corresponding conversion."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "8fa6c908-17fa-4e19-b9c4-b7afc1f2616e",
-   "metadata": {},
-   "outputs": [],
-   "source": []
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.8.12"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+# Graphical User Interface (GUI) to aid human review of processed-ground-motions.
+## By University of California, Los Angeles
+
+The geotechnical group in the University of California, Los Angeles (UCLA) prepared a graphical user interface (GUI) to further improve records processed by USGS' automated ground motion processing software, gmprocess. Currently, gmprocess is limited due to the dificulties of automating an universal-noise-threshold. In order to overcome these limitations, the user can use this GUI to review filtered and unfiltered traces to verify the quality of the processed data. Acceleration and displacement time series, as well as response spectra can be visually inspected to find any potential errors. The GUI will allow the user to interact with the data (i.e. improve corner frequency selection or reject noisy records). In the example below we describe the procedure to run and interact with the GUI. 
+
+## Prerequisites
+- The GUI is designed to read the workspace.h5 output from gmprocess. Hence, the user needs to previously process the data in gmprocess. For example `gmrecords --eventid nc73291880 download`, `gmrecords assemble` and `gmrecords process_waveforms` must be ran before going through this review step. 
+- Python script named `HumanReviewGUI.py` that contains several functions that will be called out in the Jupyter Notebook. 
+- Create the Jupyter Notebook with the lines shown below to call in the class.
+
+```ruby
+%matplotlib widget
+import HumanReviewGUI_working as HRG
+GUI = HRG.HumanReviewGUI()
+```
+
+## Plots description
+The interface is shown in Figure 1. Running the Jupyter Notebook will plot acceleration and displacement traces on the left panels while Fourier transform and response spectra will be plotted on the right. Information such as user, magnitude and epicentral distance (computed from `gps2dist_azimuth`), high-pass corner frequency (fchp) and low-pass corner frequency (fclp) are shown in the header. 
+<br/><br/>
+The orange traces depict the unfiltered record. In this context, "unfiltered" refers to the trace that has not gone trough the Butterworh filter, nonetheless, it is trimmed, demeaned and tapered. The blue trace ("filtered GUI") is filtered using the `apply_filter` function inside the python script and it will change if any of the corner frequencies are modified. The blue time series includes the minimum between 60 seconds of noise and the maximum noise lenght of a record while the traces called from gmprocess have 2 seconds (default in config file). The translucent red ("filtered gmprocess") is the record filtered inside gmprocess. This trace will not change if the corner frequencies are modified. The purpose of including both filtered traces (blue and red) is so the user can compare any improvements done in the GUI. The red trace was set to transparent to aid the visual comparison. As a result of overimposing the red over the blue, this trace will seem purple whenever "filtered GUI" overlaps "filtered gmprocess". The smoothed noise spectra is shown in green and only for the Fourier transform spectra.  The black dotted line is the theoretical acceleration decay at low frequency according to the $f^2$ model (Brune 1970; Boore and Bommer 2005), the user can use it as reference. The dashed-black lines depict corner frequencies in the fourier spectra and the highest-usable period (factor of 0.8) in the response spectra. 
+
+![interface](interface.png)*Figure 1: Interface of Graphic User Interface for human review*
+
+## Procedure
+The GUI will not update the `provenance` folder in the workspace.h5. Instead, the GUI will write a section in the `auxiliary_data` folder named `review`. In the `review` section you can find which records were accepted or rejected and the correspondant corner frequency values. To integrate these changes into the `provenance` and update the `waveforms`, the user needs to run `gmrecords process -r`.
+- Choose, from the dropdown menu, the gmprocess version used to process the data.
+- Load workspace.h5
+- Evaluate acceleration, displacement, amplitude and response plots.
+- Increase values of fchp if necessary.
+- Apply value of fclp if necessary.
+- Accept or reject the record accordingly. The GUI will automatically proceed to the next trace.
+- Run `gmrecords process -r` to overwrite the traces objects in the workspace.h5.
+
+### Changes in high-pass corner frequencies
+The high-pass corner frequency (fchp) can be modified to improve the automated selection. The automated selection of fchp is done by `auto_fchp` inside gmprocess. Sometimes, the automated fchp value is not high enough to discard lingering long period noise (which can be observed as a wobbly displacement trace, shown in Figure 3). 
+
+![fchp_before](fchp_before.png)*Figure 3: Example trace with an automated selected fchp resulting in an irregular displacement time series*
+
+![fchp_after](fchp_after.png)*Figure 4: Example trace shown in Figure 3 with a modified fchp resulting in a regular displacement time series*
+
+### Changes in low-pass corner frequencies
+Depending on how the user configured their gmprocess, the low-pass corner frequency (fclp) could be applied every time or never. In the GUI, by default, fclp is not applied to the blue trace ("filtered GUI"). The value shown in the header of the plots is the fclp selected by gmprocess which is chosen to be the minimum between $0.7*Nyquist$ frequency and the highest frequency where SNR undergoes certain threshold. Short period noise could be reflected as an irregular peak in the response spectra at short periods (Figure 5). The noise can be excluded from the trace by checking the box to the right and applying an fclp of the same value  (Figure 6).
+
+![fclp_before](fclp_before.png)*Figure 5: Example trace without fclp resulting in an irregular response spectra shape*
+
+![fclp_after](fclp_after.png)*Figure 6: Example trace shown in Figure 5 with fclp resulting in a flat response spectra at short periods*
+
+### Example of rejected record
+Some records contaminated with significant noise might pass the "failing criteria" of gmprocess. Usually, these records are easy to spot in the acceleration time series. An example is shown in Figure 7.
+
+![rejected](rejected.png)*Figure 7: Example trace with significant noise that should be rejected*
+
+## Limitations
+1. The GUI is written in a way that the blue traces will not be updated if both corner frequency values do not change from one record to the next. Which occationally occurs. In such case, slightly alter one of the corner frequency values so the plots update. Alternatively, go to the next record and navigate back to the one of interest (most likely, one of the corner frequencies will change and you will obtain the updated figures). Indicators of this shortcoming are (a) if the blue trace is missing in the response spectra, or (b) if the "filtered GUI" and "filtered gmprocess" response spectra do not overlap for the majority of the trace. Figure 8 shows the figures that fail to update and Figure 9 shows the actual traces once it was succesfully updated.
+
+![Same_fc_before](Same_fc_before.png)*Figure 8: Example trace that failed to update the blue trace because the previous plotted record had the exact same corner frequencies. This results in the red trace disapearing or not overlapping with the blue trace in the response spectra*
+
+![Same_fc_after](Same_fc_after.png)*Figure 9: Example trace shown in Figure 8 once the blue trace was succesfully updated by going back and forth to a record with different corner frequencies*
+
+2. Gmprocess might misscompute the location of the p-wave arrival or the coda. None of those issues could be further improved using the GUI. 
+3. The GUI will not update the `provenance` folder in the workspace.h5. If the user wants to pass this information from the `auxiliary_data` folder to the `provenance` folder and recompute the `waveforms`, the user needs to run `gmrecords process -r`.
+4. The GUI will convert the units of unprocessed traces into $m/s^2$ if the raw data is in g units or in a mseed format. Otherwise, the traces in the plots will be offset and the user will have to go to the python code and apply the correspondant conversion.
