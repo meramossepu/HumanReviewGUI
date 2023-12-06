@@ -48,23 +48,23 @@ The processing steps are listed below:
 - Run `gmrecords process -r` to overwrite the traces objects in the workspace.h5.
 
 ### Changes in high-pass corner frequencies
-The most common modification is an adjustment to the fchp. The automated selection of fchp is done using the `auto_fchp` package inside gmprocess, which fits a 6th order polynomial to the displacement trace and adjusts the fchp until the amplitude of the polynomial fit is a specified fraction of the amplitude of the displacement trace. Sometimes, the automated fchp value is not high enough to discard lingering long period noise (which can be observed as a wobbly displacement trace, shown in Figure 3). In this case, the fchp was increased to 0.19 Hz to render a displacement trace that is stable prior to the p-wave arrival, as shown in Figure 4.
+The most common modification is an adjustment to the fchp. The automated selection of fchp is done using the `auto_fchp` package inside gmprocess, which fits a 6th order polynomial to the displacement trace and adjusts the fchp until the amplitude of the polynomial fit is a specified fraction of the amplitude of the displacement trace. Sometimes, the automated fchp value is not high enough to discard lingering long period noise (which can be observed as a wobbly displacement trace, shown in Figure 2). In this case, the fchp was increased to 0.19 Hz to render a displacement trace that is stable prior to the p-wave arrival, as shown in Figure 3.
 
-![fchp_before](fchp_before2.png)*Figure 3: Example trace with an automated selected fchp resulting in an irregular displacement time series*
+![fchp_before](fchp_before2.png)*Figure 2: Example trace with an automated selected fchp resulting in an irregular displacement time series*
 
-![fchp_after](fchp_after2.png)*Figure 4: Example trace shown in Figure 3 with a modified fchp resulting in a regular displacement time series*
+![fchp_after](fchp_after2.png)*Figure 3: Example trace shown in Figure 2 with a modified fchp resulting in a regular displacement time series*
 
 ### Changes in low-pass corner frequencies
-Depending on how the user configured their gmprocess, the fclp could be applied every time or never. In the GUI, by default, fclp is not applied to the blue trace ("filtered GUI") because we have found that the fclp is usually not required. The value shown in the header of the plots is the fclp selected by gmprocess which is chosen to be the minimum between $0.7*Nyquist$ frequency and the highest frequency where SNR undergoes certain threshold. High amplitude short period noise could be reflected as an irregular peak in the response spectrum at short periods (Figure 5). The noise can be excluded from the trace by checking the box to the right and applying an fclp of the same value (Figure 6). In this case a low-pass filter at 14.6 Hz stabilized the short-period portion of the response spectrum.
+Depending on how the user configured their gmprocess, the fclp could be applied every time or never. In the GUI, by default, fclp is not applied to the blue trace ("filtered GUI") because we have found that the fclp is usually not required. The value shown in the header of the plots is the fclp selected by gmprocess which is chosen to be the minimum between $0.7*Nyquist$ frequency and the highest frequency where SNR undergoes certain threshold. High amplitude short period noise could be reflected as an irregular peak in the response spectrum at short periods (Figure 4). The noise can be excluded from the trace by checking the box to the right and applying an fclp of the same value (Figure 5). In this case a low-pass filter at 14.6 Hz stabilized the short-period portion of the response spectrum.
 
-![fclp_before](fclp_before2.png)*Figure 5: Example trace without fclp resulting in an irregular response spectra shape*
+![fclp_before](fclp_before2.png)*Figure 4: Example trace without fclp resulting in an irregular response spectra shape*
 
-![fclp_after](fclp_after2.png)*Figure 6: Example trace shown in Figure 5 with fclp resulting in a flat response spectra at short periods*
+![fclp_after](fclp_after2.png)*Figure 5: Example trace shown in Figure 4 with fclp resulting in a flat response spectra at short periods*
 
 ### Example of rejected record
-Some records contaminated with significant noise might pass the "failing criteria" of gmprocess. We believe this may be the result of randomness in the pre-event noise window. Usually, these records are easy to spot in the acceleration time series. An example is shown in Figure 7. Although the earthquake trace is visible above the noise level, we consider this record to be too noisy and opted to reject it.
+Some records contaminated with significant noise might pass the "failing criteria" of gmprocess. We believe this may be the result of randomness in the pre-event noise window. Usually, these records are easy to spot in the acceleration time series. An example is shown in Figure 6. Although the earthquake trace is visible above the noise level, we consider this record to be too noisy and opted to reject it.
 
-![rejected](rejected2.png)*Figure 7: Example trace with significant noise that should be rejected*
+![rejected](rejected2.png)*Figure 6: Example trace with significant noise that should be rejected*
 
 ## Limitations
 1. Gmprocess might miscompute the location of the p-wave arrival or the coda. None of those issues could be further improved using the GUI. 
