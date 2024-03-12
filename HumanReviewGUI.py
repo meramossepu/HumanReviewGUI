@@ -35,9 +35,6 @@ class HumanReviewGUI:
         dt (float)
             acceleration time series' time step
 
-        df_prov (prov doc):
-            Provenance document stored in the workspace.h5, product of gmprocess
-
         event_id (int):
             Unique identifier for earthquake event
 
@@ -120,51 +117,15 @@ class HumanReviewGUI:
 
         workspace_widget (obj):
             ipywidgets object for the name of the workspace.h5 file
-
-    Methods (in the order they appear on the code)
-    -------
-        __init__:
-            initialize the GUI
-
-        load_workspace(b):
-            loads gmprocess HDF5 file specified in workspace_widget text field
-
-        set_waveform_list(change):
-            sets list of waveforms in waveform_widget dropdown
-
-        waveform_widget_change(change):
-            updates plots on change in waveform_widget dropdown
-
-        update_plots():
-            updates plots by modifying ln and ln_filt objects
-
-        fc_change(change):
-            filters unprocessed data upon change in filter widgets, and plots filtered data
-
-        apply_filter():
-            called by fc_change, and applies specified filter
-
-        next_waveform(b):
-            loads next waveform in list upon press of next_button
-
-        previous_waveform(b):
-            loads previous waveform in list upon press of previous_button
-
-        accept_record(b):
-            updates human_review instance variable and df_prov provenance document upon press of accept_button
-
-        reject_record(b):
-            updates human_review instance variable and df_prov provenance document upon press of reject_button
-
-        clear_plots():
-            clears plot objects prior to plotting new data
     """
 
     def __init__(self):
+        """
+        Initialize the GUI.
+        """
         self.human_review = {}
         self.acc_u = None
         self.Cha = None
-        self.df_prov = None
         self.dt = None
         self.event_id = None
         self.fclp_display = None
@@ -274,7 +235,7 @@ class HumanReviewGUI:
         self.fchp_widget.disabled = False
         self.fclp_widget.disabled = False
         display(panel)
-        self.fig, self.ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 6))
+        self.fig, self.ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 6), dpi=300)
         self.ax[0, 0].set_ylabel("acc (m/s$^2$)")
         self.ax[0, 0].set_xlabel("time (s)")
         self.ax[1, 0].set_ylabel("disp (m)")
@@ -345,6 +306,11 @@ class HumanReviewGUI:
         self.load_workspace_button.on_click(self.load_workspace)
 
     def load_workspace(self, b):
+        """
+        Loads gmprocess HDF5 file specified in workspace_widget text field.
+        Args:
+            b: Dummy variable needed to run Jupyter Widgets.
+        """
         self.load_workspace_button.disabled = True
         self.workspace = StreamWorkspace.open(self.workspace_widget.value)
         try:
@@ -423,6 +389,11 @@ class HumanReviewGUI:
         return
 
     def set_waveform_list(self, change):
+        """
+        Sets list of waveforms in waveform_widget dropdown.
+        Args:
+            change: Dummy variable needed to run Jupyter Widgets.
+        """
         selection = self.waveform_widget.value
         waveform_options = []
         for key, value in self.human_review.items():
@@ -439,6 +410,11 @@ class HumanReviewGUI:
         return
 
     def waveform_widget_change(self, change):
+        """
+        Updates plots on change in waveform_widget dropdown.
+        Args:
+            change: Dummy variable needed to run Jupyter Widgets.
+        """
         if self.waveform_widget.value == None:
             return
         if change["new"] == False:
@@ -454,6 +430,9 @@ class HumanReviewGUI:
         return
 
     def update_plots(self):
+        """
+        Updates plots by modifying ln and ln_filt objects.
+        """
         self.NetSta = self.waveform_widget.value.split(", ")[0]
         self.Cha = self.waveform_widget.value.split(", ")[1]
         self.trace_row = self.trace_data[
@@ -489,38 +468,18 @@ class HumanReviewGUI:
         nt = min(self.tr.stats.starttime - tr_u.stats.starttime, 60)
         time = np.linspace(self.dt + nt, (self.dt * npts) + nt, npts)
         try:
-            self.df_prov = self.tr.getProvDataFrame()
+            rr_units = self.tr.getProvenance("remove_response")[0]['output_units']
         except:
-            self.df_prov = self.tr.get_prov_dataframe()
-        rr_units = (
-            self.df_prov.loc[self.df_prov["Process Step"] == "Remove Response"]
-            .loc[self.df_prov["Process Attribute"] == "output_units"]["Process Value"]
-            .values[0]
-        )
+            rr_units = self.tr.get_provenance("remove_response")[0]['prov_attributes']['output_units']
         if "cm/s^2" in rr_units:
             Output = "ACC"
         else:
             Output = "VEL"
         station_metrics = self.workspace.dataset.waveforms[self.NetSta].StationXML
         try:
-            WaterLevel = float(
-                self.df_prov.loc[self.df_prov["Process Step"] == "Remove Response"]
-                .loc[self.df_prov["Process Attribute"] == "water_level"][
-                    "Process Value"
-                ]
-                .values[0]
-            )
-            PreFilt = (
-                self.df_prov.loc[self.df_prov["Process Step"] == "Remove Response"]
-                .loc[self.df_prov["Process Attribute"] == "pre_filt_freqs"][
-                    "Process Value"
-                ]
-                .values[0][1:-1]
-                .split(",")
-            )
-            desired_array = np.array(
-                [float(numeric_string) for numeric_string in PreFilt]
-            )
+            WaterLevel = self.tr.getProvenance("remove_response")[0]['water_level']
+            PreFilt = self.tr.getProvenance("remove_response")[0]['pre_filt_freqs']
+            desired_array = np.fromstring(PreFilt[1:-1], sep=',')
             with warnings.catch_warnings(record=True):
                 tr_u.remove_response(
                     inventory=station_metrics,
@@ -535,10 +494,28 @@ class HumanReviewGUI:
                 )
         except:
             try:
+                WaterLevel = self.tr.get_provenance("remove_response")[0]['prov_attributes']['water_level']
+                PreFilt = self.tr.get_provenance("remove_response")[0]['prov_attributes']['pre_filt_freqs']
+                desired_array = np.fromstring(PreFilt[1:-1], sep=',')
+                
                 with warnings.catch_warnings(record=True):
-                    tr_u.remove_response(inventory=station_metrics, output=Output)
+                    tr_u.remove_response(
+                        inventory=station_metrics,
+                        output=Output,
+                        water_level=WaterLevel,
+                        pre_filt=(
+                            desired_array[0],
+                            desired_array[1],
+                            desired_array[2],
+                            desired_array[3],
+                        ),
+                    )
             except:
-                tr_u.data = tr_u.data / 100
+                try:
+                    with warnings.catch_warnings(record=True):
+                        tr_u.remove_response(inventory=station_metrics, output=Output)
+                except:
+                    tr_u.data = tr_u.data / 100
         tr_u.trim(self.tr.stats.starttime - nt, self.tr.stats.endtime)
         tr_u.taper(type="hann", max_percentage=0.05, side="both")
         tr_u.data = tr_u.data - np.mean(tr_u.data)
@@ -557,10 +534,10 @@ class HumanReviewGUI:
         time_u = np.linspace(self.dt, self.dt * len(acc_u_plot), len(acc_u_plot))
         self.T = ars.get_ngawest2_T()
         Sa = ars.get_response_spectrum(
-            motions=[acc / 9.81], T=self.T, D=0.05, dt=self.dt, verbose=0
+            motions=acc/9.81, T=self.T, D=0.05, dt=self.dt, verbose=0, zeropad=0
         )
         Sa_u = ars.get_response_spectrum(
-            motions=[acc_u_plot / 9.81], T=self.T, D=0.05, dt=self.dt, verbose=0
+            motions=acc_u_plot/9.81, T=self.T, D=0.05, dt=self.dt, verbose=0, zeropad=0
         )
         self.NFFT = npts_u
         Facc = np.fft.rfft(acc, n=npts)
@@ -576,14 +553,11 @@ class HumanReviewGUI:
             except:
                 fchp = self.tr.get_parameter("review")["corner_frequencies"]["highpass"]
         except:
-            fchp = float(
-                self.df_prov.loc[self.df_prov["Process Step"] == "Highpass Filter"]
-                .loc[self.df_prov["Process Attribute"] == "corner_frequency"][
-                    "Process Value"
-                ]
-                .values[0]
-            )
-        fchp = np.round(fchp, 4)
+            try:
+                fchp = self.tr.getParameter("corner_frequencies")['highpass']
+            except:
+                fchp = self.tr.get_parameter("corner_frequencies")['highpass']
+            fchp = np.round(fchp, 4)
         try:
             try:
                 self.fclp_display = self.tr.getParameter("review")[
@@ -594,13 +568,10 @@ class HumanReviewGUI:
                     "corner_frequencies"
                 ]["lowpass"]
         except:
-            self.fclp_display = float(
-                self.df_prov.loc[self.df_prov["Process Step"] == "Lowpass Filter"]
-                .loc[self.df_prov["Process Attribute"] == "corner_frequency"][
-                    "Process Value"
-                ]
-                .values[0]
-            )
+            try:
+                self.fclp_display = self.tr.getParameter("corner_frequencies")['lowpass']
+            except:
+                self.fclp_display = self.tr.get_parameter("corner_frequencies")['lowpass']
         FAS_f2 = np.abs(Facc[freq > 0]) / (freq[freq > 0]) ** 2
         f2_amp = np.mean(FAS_f2[FAS_f2 > 0.5 * np.max(FAS_f2)])
         f_plot = np.asarray([0.003, 10.0])
@@ -661,6 +632,11 @@ class HumanReviewGUI:
         return
 
     def fc_change(self, change):
+        """
+        Filters unprocessed data upon change in filter widgets, and plots filtered data.
+        Args:
+            change: Dummy variable needed to run Jupyter Widgets.
+        """
         if self.fclp_checkbox_widget.value == True:
             fclp_corner = self.fclp_widget.value
         else:
@@ -675,7 +651,7 @@ class HumanReviewGUI:
         Fdisp_filt = np.hstack((0.0, Fdisp_filt))
         disp_filt = np.fft.irfft(Fdisp_filt)
         Sa_filt = ars.get_response_spectrum(
-            motions=[acc_filt / 9.81], T=self.T, D=0.05, dt=self.dt, verbose=0
+            motions=acc_filt/9.81, T=self.T, D=0.05, dt=self.dt, verbose=0, zeropad=0
         )
         self.ln["Facc_filt"].set_data(
             self.freq_u[self.freq_u > 0],
@@ -694,23 +670,22 @@ class HumanReviewGUI:
                 a.grid(True, alpha=0.5)
 
     def apply_filter(self):
+        """
+        Called by fc_change, and applies specified filter.
+        Return:
+            Filtered acceleration array.      
+        """
         fchp_corner = self.fchp_widget.value
         if self.fclp_checkbox_widget.value == True:
             fclp_corner = self.fclp_widget.value
         else:
             fclp_corner = None
-        number_of_passes = float(
-            self.df_prov.loc[self.df_prov["Process Step"] == "Highpass Filter"]
-            .loc[self.df_prov["Process Attribute"] == "number_of_passes"][
-                "Process Value"
-            ]
-            .values[0]
-        )
-        filter_order = float(
-            self.df_prov.loc[self.df_prov["Process Step"] == "Highpass Filter"]
-            .loc[self.df_prov["Process Attribute"] == "filter_order"]["Process Value"]
-            .values[0]
-        )
+        try:
+            number_of_passes = self.tr.getProvenance("highpass_filter")[0]['number_of_passes']
+            filter_order = self.tr.getProvenance("highpass_filter")[0]['filter_order']
+        except:
+            number_of_passes = self.tr.get_provenance("highpass_filter")[0]['prov_attributes']['number_of_passes']
+            filter_order = self.tr.get_provenance("highpass_filter")[0]['prov_attributes']['filter_order']
         filter_type = "Butterworth"
         if filter_type == "Butterworth ObsPy":
             tr_acc_filt = obspy.Trace(self.acc_u, header={"dt": self.dt})
@@ -739,6 +714,11 @@ class HumanReviewGUI:
             return "Incorrect filter type"
 
     def next_waveform(self, b):
+        """
+        Loads next waveform in list upon press of next_button.
+        Args:
+            b: Dummy variable needed to run Jupyter Widgets.
+        """
         I = self.waveform_widget.options.index(self.waveform_widget.value)
         if I == len(self.waveform_widget.options) - 2:
             self.next_button.disabled = True
@@ -755,6 +735,11 @@ class HumanReviewGUI:
         return
 
     def previous_waveform(self, b):
+        """
+        Loads previous waveform in list upon press of previous_button.
+        Args:
+            b: Dummy variable needed to run Jupyter Widgets.
+        """
         I = self.waveform_widget.options.index(self.waveform_widget.value)
         if I == 1:
             self.previous_button.disabled = True
@@ -771,6 +756,11 @@ class HumanReviewGUI:
         return
 
     def accept_record(self, b):
+        """
+        Updates human_review instance variable in auxiliary_data upon press of accept_button.
+        Args:
+            b: Dummy variable needed to run Jupyter Widgets.
+        """
         self.clear_plots()
         try:  # Delete auxiliary_data for record if it exists
             del self.workspace.dataset.auxiliary_data.review[self.NetSta][self.NCR]
@@ -820,6 +810,11 @@ class HumanReviewGUI:
         return
 
     def reject_record(self, b):
+        """
+        Updates human_review instance variable in auxiliary_data upon press of reject_button.
+        Args:
+            b: Dummy variable needed to run Jupyter Widgets.
+        """
         self.clear_plots()
         try:  # Delete auxiliary_data for record if it exists
             del self.workspace.dataset.auxiliary_data.review[self.NetSta][self.NCR]
@@ -869,6 +864,9 @@ class HumanReviewGUI:
         return
 
     def clear_plots(self):
+        """
+        Clears plot objects prior to plotting new data.
+        """
         for key, value in self.ln.items():
             value.set_data([0.01], [0.01])
         for key, value in self.ln_filt.items():
